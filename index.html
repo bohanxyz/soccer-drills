@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Color Grid</title>
+<style>
+  :root {
+    --pink: #F48FB1;
+    --yellow: #FFD54F;
+    --green: #81C784;
+    --blue: #64B5F6;
+    --ink: #1f2330;
+    --paper: #fafafa;
+    --controls-h: 150px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 12px;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+    overflow: hidden;
+  }
+  .grid {
+    --size: min(96vw, calc(100dvh - var(--controls-h)));
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: calc(var(--size) * 0.02);
+    width: var(--size);
+    height: var(--size);
+  }
+  .cell {
+    border-radius: calc(var(--size) * 0.03);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: calc(var(--size) * 0.14);
+    font-weight: 700;
+    color: var(--ink);
+    transition: background-color 0.35s ease;
+  }
+  .panel { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 1rem;
+  }
+  input {
+    width: 72px;
+    padding: 8px 10px;
+    font-size: 1rem;
+    border: 2px solid var(--ink);
+    border-radius: 8px;
+  }
+  button {
+    padding: 9px 14px;
+    font-size: 1rem;
+    font-weight: 600;
+    border: 2px solid var(--ink);
+    border-radius: 8px;
+    background: var(--ink);
+    color: #fff;
+    cursor: pointer;
+  }
+  button.secondary { background: transparent; color: var(--ink); }
+  button:focus-visible, input:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+  .status { font-variant-numeric: tabular-nums; min-height: 1.4em; font-size: 0.95rem; }
+  .bar {
+    width: min(96vw, 500px);
+    height: 6px;
+    background: #e4e4e4;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .bar > div { height: 100%; width: 0; background: var(--ink); }
+
+  body.full { padding: 0; gap: 0; background: #111; }
+  body.full .panel { display: none; }
+  body.full .grid {
+    --size: min(100vw, 100dvh);
+    padding: calc(var(--size) * 0.02);
+  }
+  .exit-hint {
+    display: none;
+    position: fixed;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #bbb;
+    font-size: 0.85rem;
+    pointer-events: none;
+  }
+  body.full .exit-hint { display: block; animation: fade 3s forwards; }
+  @keyframes fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .cell { transition: none; } }
+</style>
+</head>
+<body>
+
+<div class="grid" id="grid"></div>
+
+<div class="panel">
+  <div class="bar"><div id="progress"></div></div>
+  <div class="controls">
+    <label for="seconds">Timer (s)</label>
+    <input id="seconds" type="number" min="1" value="5">
+    <button id="start">Start</button>
+    <button id="stop" class="secondary">Stop</button>
+    <button id="shuffle" class="secondary">Shuffle</button>
+    <button id="full" class="secondary">Full screen</button>
+  </div>
+  <div class="status" id="status">Set a timer and press Start.</div>
+</div>
+
+<div class="exit-hint">Tap the grid or press Esc to exit</div>
+
+<script>
+  const COLORS = ["var(--pink)", "var(--yellow)", "var(--green)", "var(--blue)"];
+  const grid = document.getElementById("grid");
+  const statusEl = document.getElementById("status");
+  const progress = document.getElementById("progress");
+  const input = document.getElementById("seconds");
+
+  const cells = [];
+  for (let i = 1; i <= 9; i++) {
+    const c = document.createElement("div");
+    c.className = "cell";
+    c.textContent = i;
+    grid.appendChild(c);
+    cells.push(c);
+  }
+
+  function randomize() {
+    cells.forEach(c => {
+      c.style.backgroundColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+    });
+  }
+
+  let rafId = null, duration = 0, endTime = 0;
+
+  function tick() {
+    if (endTime - performance.now() <= 0) {
+      randomize();
+      endTime = performance.now() + duration;
+    }
+    const left = Math.max(0, endTime - performance.now());
+    statusEl.textContent = `Next refresh in ${(left / 1000).toFixed(1)}s`;
+    progress.style.width = `${100 - (left / duration) * 100}%`;
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function start() {
+    const secs = parseFloat(input.value);
+    if (!(secs > 0)) {
+      statusEl.textContent = "Enter a timer greater than 0 seconds.";
+      return;
+    }
+    stop();
+    duration = secs * 1000;
+    endTime = performance.now() + duration;
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function stop() {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    progress.style.width = "0";
+    statusEl.textContent = "Stopped.";
+  }
+
+  function enterFull() {
+    document.body.classList.add("full");
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (req) { try { const p = req.call(el); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+  }
+
+  function exitFull() {
+    document.body.classList.remove("full");
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if ((document.fullscreenElement || document.webkitFullscreenElement) && exit) exit.call(document);
+  }
+
+  document.getElementById("start").onclick = start;
+  document.getElementById("stop").onclick = stop;
+  document.getElementById("shuffle").onclick = randomize;
+  document.getElementById("full").onclick = enterFull;
+  grid.onclick = () => { if (document.body.classList.contains("full")) exitFull(); };
+  document.addEventListener("keydown", e => { if (e.key === "Escape") exitFull(); });
+  document.addEventListener("fullscreenchange", () => {
+    if (!document.fullscreenElement) document.body.classList.remove("full");
+  });
+  document.addEventListener("webkitfullscreenchange", () => {
+    if (!document.webkitFullscreenElement) document.body.classList.remove("full");
+  });
+  input.addEventListener("keydown", e => { if (e.key === "Enter") start(); });
+
+  randomize();
+</script>
+</body>
+</html>
