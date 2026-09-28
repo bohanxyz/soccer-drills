@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Color &amp; Number Flash</title>
+<style>
+  :root {
+    --ink: #1f2330;
+    --muted: #5b6070;
+    --paper: #fafafa;
+    --line: #d6d8de;
+    --focus: #1E88E5;
+    --error: #c62828;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  }
+
+  /* Setup screen */
+  .setup {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: max(20px, env(safe-area-inset-top)) 20px 32px;
+  }
+  .back { color: var(--muted); text-decoration: none; font-size: 1rem; }
+  h1 { margin: 16px 0 4px; font-size: 1.9rem; }
+  .lead { margin: 0 0 28px; color: var(--muted); line-height: 1.4; }
+  fieldset { border: 0; padding: 0; margin: 0 0 24px; }
+  legend, .field-label {
+    display: block;
+    padding: 0;
+    margin-bottom: 10px;
+    font-weight: 700;
+    font-size: 1.05rem;
+  }
+  .hint { margin: 8px 0 0; color: var(--muted); font-size: 0.9rem; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px 7px 7px;
+    border: 2px solid var(--line);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--ink);
+    font: inherit;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  .chip .swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+  }
+  .chip[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: #fff; }
+  input {
+    width: 100%;
+    max-width: 260px;
+    padding: 10px 12px;
+    font: inherit;
+    font-size: 1.05rem;
+    border: 2px solid var(--ink);
+    border-radius: 8px;
+  }
+  input[type="number"] { max-width: 120px; }
+  .start {
+    width: 100%;
+    padding: 16px;
+    font: inherit;
+    font-size: 1.25rem;
+    font-weight: 700;
+    border: 0;
+    border-radius: 12px;
+    background: var(--ink);
+    color: #fff;
+    cursor: pointer;
+  }
+  .error { min-height: 1.4em; margin: 10px 0 0; color: var(--error); }
+  button:focus-visible, input:focus-visible, a:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  /* Full-screen display */
+  .stage {
+    display: none;
+    position: fixed;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  body.running { overflow: hidden; }
+  body.running .setup { display: none; }
+  body.running .stage { display: flex; }
+  .number {
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-size: min(70dvh, calc(150vw / var(--digits, 1)));
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .exit-hint {
+    display: none;
+    position: fixed;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 0.9rem;
+    pointer-events: none;
+  }
+  body.running .exit-hint { display: block; animation: fade 3s forwards; }
+  @keyframes fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+</style>
+</head>
+<body>
+
+<main class="setup">
+  <a class="back" href="../index.html">&larr; All drills</a>
+  <h1>Color &amp; Number Flash</h1>
+  <p class="lead">
+    Fills the screen with one random color and one big number from your set.
+    It switches to a new pair every few seconds.
+  </p>
+
+  <fieldset>
+    <legend>Colors</legend>
+    <div class="chips" id="colors"></div>
+  </fieldset>
+
+  <fieldset>
+    <label class="field-label" for="numbers">Numbers</label>
+    <input id="numbers" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <p class="hint">A range like <b>1-9</b>, a list like <b>2, 4, 7</b>, or both.</p>
+  </fieldset>
+
+  <fieldset>
+    <label class="field-label" for="seconds">Seconds per flash</label>
+    <input id="seconds" type="number" min="0.5" step="0.5" inputmode="decimal">
+  </fieldset>
+
+  <button class="start" id="start">Start full screen</button>
+  <p class="error" id="error" role="alert"></p>
+</main>
+
+<div class="stage" id="stage">
+  <div class="number" id="number"></div>
+</div>
+<div class="exit-hint">Tap anywhere to stop</div>
+
+<script>
+  // Colors available to pick from. `text` is the number color drawn on top.
+  const PALETTE = [
+    { name: "Red",    hex: "#E53935", text: "#fff" },
+    { name: "Blue",   hex: "#1E88E5", text: "#fff" },
+    { name: "Yellow", hex: "#FDD835", text: "#1f2330" },
+    { name: "Green",  hex: "#43A047", text: "#fff" },
+    { name: "Orange", hex: "#FB8C00", text: "#1f2330" },
+    { name: "Purple", hex: "#8E24AA", text: "#fff" },
+    { name: "Pink",   hex: "#EC407A", text: "#fff" },
+    { name: "White",  hex: "#FFFFFF", text: "#1f2330" },
+    { name: "Black",  hex: "#000000", text: "#fff" },
+  ];
+  const DEFAULTS = { colors: ["Red", "Blue", "Yellow", "Green"], numbers: "1-9", seconds: 3 };
+  const STORAGE_KEY = "colorNumberFlash.settings";
+
+  const colorsEl = document.getElementById("colors");
+  const numbersInput = document.getElementById("numbers");
+  const secondsInput = document.getElementById("seconds");
+  const errorEl = document.getElementById("error");
+  const stage = document.getElementById("stage");
+  const numberEl = document.getElementById("number");
+
+  function loadSettings() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (saved) return { ...DEFAULTS, ...saved };
+    } catch (e) {}
+    return { ...DEFAULTS };
+  }
+
+  function saveSettings(settings) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch (e) {}
+  }
+
+  // "1-9, 12" -> [1..9, 12]. Returns null if the text can't be read.
+  function parseNumbers(text) {
+    const out = new Set();
+    const parts = text.replace(/\s*[-–—]\s*/g, "-").split(/[\s,]+/).filter(Boolean);
+    for (const part of parts) {
+      const m = part.match(/^(\d+)(?:-(\d+))?$/);
+      if (!m) return null;
+      let a = Number(m[1]);
+      let b = m[2] === undefined ? a : Number(m[2]);
+      if (a > b) [a, b] = [b, a];
+      if (b - a > 999) return null;
+      for (let n = a; n <= b; n++) out.add(n);
+    }
+    return [...out];
+  }
+
+  const initial = loadSettings();
+  const chips = PALETTE.map(color => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip";
+    chip.setAttribute("aria-pressed", String(initial.colors.includes(color.name)));
+    chip.innerHTML = `<span class="swatch" style="background:${color.hex}"></span>${color.name}`;
+    chip.onclick = () => {
+      chip.setAttribute("aria-pressed", String(chip.getAttribute("aria-pressed") !== "true"));
+    };
+    colorsEl.appendChild(chip);
+    return chip;
+  });
+  numbersInput.value = initial.numbers;
+  secondsInput.value = initial.seconds;
+
+  let colors = [], numbers = [], current = null, timer = null, wakeLock = null;
+
+  function pickNext() {
+    const hasOther = colors.length * numbers.length > 1;
+    let next;
+    do {
+      next = {
+        color: colors[Math.floor(Math.random() * colors.length)],
+        number: numbers[Math.floor(Math.random() * numbers.length)],
+      };
+    } while (hasOther && current && next.color === current.color && next.number === current.number);
+    return next;
+  }
+
+  function show() {
+    current = pickNext();
+    stage.style.backgroundColor = current.color.hex;
+    stage.style.color = current.color.text;
+    numberEl.textContent = current.number;
+    numberEl.style.setProperty("--digits", String(current.number).length);
+  }
+
+  async function requestWakeLock() {
+    try { wakeLock = navigator.wakeLock ? await navigator.wakeLock.request("screen") : null; }
+    catch (e) { wakeLock = null; }
+  }
+
+  function releaseWakeLock() {
+    if (wakeLock) wakeLock.release().catch(() => {});
+    wakeLock = null;
+  }
+
+  function enterFullscreen() {
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (req) { try { const p = req.call(el); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+  }
+
+  function exitFullscreen() {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if ((document.fullscreenElement || document.webkitFullscreenElement) && exit) exit.call(document);
+  }
+
+  function start() {
+    const selected = PALETTE.filter((_, i) => chips[i].getAttribute("aria-pressed") === "true");
+    const parsed = parseNumbers(numbersInput.value);
+    const seconds = parseFloat(secondsInput.value);
+
+    if (selected.length === 0) { errorEl.textContent = "Pick at least one color."; return; }
+    if (!parsed || parsed.length === 0) { errorEl.textContent = "Enter numbers like 1-9 or 2, 4, 7."; return; }
+    if (!(seconds > 0)) { errorEl.textContent = "Seconds per flash must be greater than 0."; return; }
+    errorEl.textContent = "";
+
+    saveSettings({ colors: selected.map(c => c.name), numbers: numbersInput.value, seconds });
+    colors = selected;
+    numbers = parsed;
+    current = null;
+
+    document.body.classList.add("running");
+    enterFullscreen();
+    requestWakeLock();
+    show();
+    timer = setInterval(show, seconds * 1000);
+  }
+
+  function stop() {
+    if (!timer) return;
+    clearInterval(timer);
+    timer = null;
+    document.body.classList.remove("running");
+    exitFullscreen();
+    releaseWakeLock();
+  }
+
+  document.getElementById("start").onclick = start;
+  stage.onclick = stop;
+  document.addEventListener("keydown", e => { if (e.key === "Escape") stop(); });
+  [numbersInput, secondsInput].forEach(input => {
+    input.addEventListener("keydown", e => { if (e.key === "Enter") start(); });
+  });
+  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement) stop(); });
+  document.addEventListener("webkitfullscreenchange", () => { if (!document.webkitFullscreenElement) stop(); });
+  // The screen wake lock is dropped when the tab is hidden; take it back on return.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && timer) requestWakeLock();
+  });
+</script>
+</body>
+</html>
