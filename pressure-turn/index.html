@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Pressure Turn</title>
+<style>
+  :root {
+    --ink: #1f2330;
+    --muted: #5b6070;
+    --paper: #fafafa;
+    --line: #d6d8de;
+    --focus: #1E88E5;
+    --error: #c62828;
+    --ok: #2e7d32;
+    --pressure: #FF1744;
+    --amber: #FFC400;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  }
+
+  /* Setup screen */
+  .setup {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: max(20px, env(safe-area-inset-top)) 20px 32px;
+  }
+  .back { color: var(--muted); text-decoration: none; font-size: 1rem; }
+  h1 { margin: 16px 0 4px; font-size: 1.9rem; }
+  .lead { margin: 0 0 28px; color: var(--muted); line-height: 1.4; }
+  fieldset { border: 0; padding: 0; margin: 0 0 24px; }
+  legend, .field-label {
+    display: block;
+    padding: 0;
+    margin-bottom: 10px;
+    font-weight: 700;
+    font-size: 1.05rem;
+  }
+  .hint { margin: 8px 0 0; color: var(--muted); font-size: 0.9rem; line-height: 1.35; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    padding: 9px 16px;
+    border: 2px solid var(--line);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--ink);
+    font: inherit;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  .chip[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: #fff; }
+  input {
+    padding: 10px 12px;
+    font: inherit;
+    font-size: 1.05rem;
+    border: 2px solid var(--ink);
+    border-radius: 8px;
+  }
+  input[type="number"] { width: 100px; }
+  input[type="range"] { width: 100%; padding: 0; border: 0; accent-color: var(--ink); }
+  .pair { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: var(--muted); }
+  .start {
+    width: 100%;
+    padding: 16px;
+    font: inherit;
+    font-size: 1.25rem;
+    font-weight: 700;
+    border: 0;
+    border-radius: 12px;
+    background: var(--ink);
+    color: #fff;
+    cursor: pointer;
+  }
+  .secondary {
+    padding: 9px 14px;
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 700;
+    border: 2px solid var(--ink);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .error { min-height: 1.4em; margin: 10px 0 0; color: var(--error); }
+  .summary { margin: 4px 0 0; color: var(--muted); }
+  button:focus-visible, input:focus-visible, a:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+  }
+  [hidden] { display: none !important; }
+
+  /* Cue cards (also the on/off switch for each cue) */
+  .cue-list { display: grid; gap: 10px; }
+  .cue-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 10px;
+    border: 2px dashed var(--line);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .cue-card[aria-pressed="true"] { border: 2px solid var(--ink); background: #fff; color: var(--ink); }
+  .cue-card[aria-pressed="false"] .mini { opacity: 0.35; }
+  .cue-card strong { font-size: 1.05rem; }
+  .cue-card .tag { color: var(--muted); font-size: 0.9rem; }
+  .cue-card p { margin: 4px 0 0; font-size: 0.95rem; line-height: 1.35; }
+  .cue-card .state { margin-left: auto; align-self: flex-start; font-size: 0.85rem; font-weight: 700; }
+  .mini {
+    flex: none;
+    width: 108px;
+    height: 68px;
+    padding: 4px;
+    border-radius: 8px;
+    background: #000;
+  }
+  .mini .lanes { gap: 3px; }
+  .mini .lane { border-radius: 2px; }
+
+  /* Mic check */
+  .mic-box { display: grid; gap: 12px; }
+  .meter {
+    position: relative;
+    height: 22px;
+    border: 2px solid var(--ink);
+    border-radius: 6px;
+    background: #fff;
+    overflow: hidden;
+  }
+  .meter-fill { height: 100%; width: 0; background: #90A4AE; }
+  .meter.hit .meter-fill { background: var(--ok); }
+  .meter-line { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1px; background: var(--error); }
+  .mic-status { margin: 0; font-size: 0.95rem; font-variant-numeric: tabular-nums; }
+
+  /* Lanes: shared by the full-screen display and the small previews */
+  .lanes { display: flex; gap: 1.5%; height: 100%; background: #000; }
+  .lane {
+    flex: 1;
+    position: relative;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+  }
+  .lane.block { background: var(--pressure); }
+  .shape { width: 85%; }
+  .shape svg { display: block; width: 100%; height: auto; max-height: 85vh; overflow: visible; }
+  .chevron polygon { fill: var(--pressure); stroke: var(--amber); stroke-width: 4; stroke-linejoin: round; }
+  .from-left.chevron svg { transform: scaleX(-1); }
+  .circle .ring { fill: none; stroke: var(--pressure); stroke-width: 16; }
+  .circle .edge { fill: none; stroke: var(--amber); stroke-width: 3; }
+  .pulse {
+    width: 90%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(150, 160, 180, 0.55) 0%, rgba(150, 160, 180, 0) 70%);
+  }
+
+  /* Full-screen display */
+  .stage {
+    display: none;
+    position: fixed;
+    inset: 0;
+    padding: 1.5vw;
+    background: #000;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  body.running { overflow: hidden; }
+  body.running .setup { display: none; }
+  body.running .stage { display: block; }
+  .stage .lanes { opacity: 0; transition: opacity 150ms ease-out; }
+  .stage .lanes.show { opacity: 1; transition: none; }
+  .stage .chevron.from-right { animation: in-from-right var(--cue-ms) ease-out both; }
+  .stage .chevron.from-left { animation: in-from-left var(--cue-ms) ease-out both; }
+  .stage .circle { animation: closing var(--cue-ms) ease-in both; }
+  .stage .pulse { animation: pulse var(--cue-ms) ease-in-out both; }
+  @keyframes in-from-right { from { transform: translateX(35%); } to { transform: translateX(-5%); } }
+  @keyframes in-from-left { from { transform: translateX(-35%); } to { transform: translateX(5%); } }
+  @keyframes closing { from { transform: scale(1.5); } to { transform: scale(0.6); } }
+  @keyframes pulse { 0% { opacity: 0; } 40% { opacity: 1; } 100% { opacity: 0.4; } }
+
+  .exit-hint {
+    display: none;
+    position: fixed;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  body.running .exit-hint { display: block; animation: fade 3s forwards; }
+  @keyframes fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+</style>
+</head>
+<body>
+
+<main class="setup">
+  <a class="back" href="../index.html">&larr; All drills</a>
+  <h1>Pressure Turn</h1>
+  <p class="lead">
+    The player receives from Wall A and opens up for a half-turn. When the ball hits Wall A,
+    the iPad hears it, waits a random beat, then flashes a pressure cue for about half a second.
+    The cue tells the player what to do with the ball. A late head check misses it.
+  </p>
+
+  <fieldset>
+    <legend>Cues</legend>
+    <div class="cue-list" id="cues"></div>
+    <p class="hint">Tap a cue to turn it on or off. Each flash picks one of the cues that are on.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>No pressure shows</legend>
+    <div class="chips" id="pulse"></div>
+    <p class="hint">With a blank screen, a missed cue looks the same as no pressure.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Pressure shape</legend>
+    <div class="chips" id="shape"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Trigger</legend>
+    <div class="chips" id="trigger"></div>
+
+    <div id="mic-panel">
+      <p class="hint">Listens for the ball hitting Wall A. Stand the iPad near Wall A.</p>
+      <div class="mic-box" style="margin-top: 14px">
+        <div>
+          <button class="secondary" type="button" id="mic-toggle">Turn on microphone</button>
+        </div>
+        <div id="mic-check" hidden>
+          <div class="meter" id="meter" aria-hidden="true">
+            <div class="meter-fill" id="meter-fill"></div>
+            <div class="meter-line" id="meter-line"></div>
+          </div>
+          <p class="mic-status" id="mic-status" style="margin-top: 8px">Hits heard: 0</p>
+        </div>
+        <div>
+          <label class="field-label" for="level">Trigger level</label>
+          <input id="level" type="range" min="1" max="99" step="1">
+          <p class="hint">
+            Turn on the microphone and kick a few balls at Wall A. Move the red line just below
+            the thuds and above talking and footsteps. Each thud should add one hit.
+          </p>
+        </div>
+        <div>
+          <label class="field-label" for="cooldown">Ignore sounds after a hit for</label>
+          <div class="pair"><input id="cooldown" type="number" min="0" step="0.1" inputmode="decimal"> seconds</div>
+          <p class="hint">Stops the first touch or a bounce from starting another cue.</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="timer-panel" hidden>
+      <p class="hint">No microphone. A new cue starts on a random timer.</p>
+      <div class="pair" style="margin-top: 14px">
+        Every
+        <input id="timer-min" type="number" min="0.5" step="0.5" inputmode="decimal" aria-label="Shortest gap in seconds">
+        to
+        <input id="timer-max" type="number" min="0.5" step="0.5" inputmode="decimal" aria-label="Longest gap in seconds">
+        seconds
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Wait before the cue</legend>
+    <div class="pair">
+      <input id="delay-min" type="number" min="0" step="10" inputmode="numeric" aria-label="Shortest wait in milliseconds">
+      to
+      <input id="delay-max" type="number" min="0" step="10" inputmode="numeric" aria-label="Longest wait in milliseconds">
+      ms
+    </div>
+    <p class="hint">A random wait after the thud, so the cue lands while the ball travels.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Cue on screen for</legend>
+    <div class="pair">
+      <input id="cue-min" type="number" min="50" step="10" inputmode="numeric" aria-label="Shortest cue in milliseconds">
+      to
+      <input id="cue-max" type="number" min="50" step="10" inputmode="numeric" aria-label="Longest cue in milliseconds">
+      ms
+    </div>
+    <p class="hint">Then the screen fades to black.</p>
+  </fieldset>
+
+  <button class="start" id="start">Start full screen</button>
+  <p class="error" id="error" role="alert"></p>
+  <p class="summary" id="summary"></p>
+</main>
+
+<div class="stage" id="stage">
+  <div class="lanes" id="stage-lanes">
+    <div class="lane"></div><div class="lane"></div><div class="lane"></div>
+  </div>
+</div>
+<div class="exit-hint" id="exit-hint">Tap anywhere to stop</div>
+
+<script>
+  const CUES = [
+    { key: "none",  name: "No pressure",    tag: "Green light to turn",
+      text: "Finish the half-turn and drive the pass to Wall B." },
+    { key: "right", name: "Right pressure", tag: "Chop trigger",
+      text: "Open the half-turn, spot the red in the right lane, chop back left, pass to Wall A." },
+    { key: "left",  name: "Left pressure",  tag: "Chop trigger",
+      text: "Open the half-turn, spot the red in the left lane, chop back right, pass to Wall A." },
+    { key: "lock",  name: "Full lock",      tag: "One-touch bounce",
+      text: "Red across center and right. Skip the turn and play a one-touch cushion pass back to Wall A." },
+  ];
+  const DEFAULTS = {
+    cues: ["none", "right", "left", "lock"],
+    pulse: true,
+    shape: "chevron",
+    trigger: "mic",
+    level: 70,
+    cooldown: 1.5,
+    timerMin: 3,
+    timerMax: 5,
+    delayMin: 150,
+    delayMax: 350,
+    cueMin: 400,
+    cueMax: 500,
+  };
+  const STORAGE_KEY = "pressureTurn.settings";
+  const SVG = {
+    chevron: '<svg viewBox="0 0 100 180" aria-hidden="true"><polygon points="62,4 14,90 62,176 90,176 42,90 90,4"/></svg>',
+    circle: '<svg viewBox="0 0 100 100" aria-hidden="true"><circle class="ring" cx="50" cy="50" r="38"/><circle class="edge" cx="50" cy="50" r="47.5"/></svg>',
+  };
+
+  // mic = { ctx, stream, analyser, buf } while the microphone is on.
+  // run = { s: settings, armedAt, timers, counts } while the drill is on screen.
+  let mic = null, micStarting = null, run = null, wakeLock = null;
+  let meterLevel = 0, testHits = 0, lastTestHit = 0;
+
+  const $ = id => document.getElementById(id);
+  const stage = $("stage");
+  const stageLanesEl = $("stage-lanes");
+  const stageLanes = [...stageLanesEl.children];
+  const errorEl = $("error");
+  const levelInput = $("level");
+  const cooldownInput = $("cooldown");
+  const meterEl = $("meter");
+  const meterFill = $("meter-fill");
+  const meterLine = $("meter-line");
+  const micStatus = $("mic-status");
+  const micToggle = $("mic-toggle");
+
+  function loadSettings() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (saved) return { ...DEFAULTS, ...saved };
+    } catch (e) {}
+    return { ...DEFAULTS };
+  }
+
+  function saveSettings(settings) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch (e) {}
+  }
+
+  const rand = (min, max) => min + Math.random() * (max - min);
+  const pick = list => list[Math.floor(Math.random() * list.length)];
+
+  // Draw one cue into three lane elements (left, center, right).
+  function fillLanes(lanes, key, shape, pulse) {
+    lanes.forEach(lane => { lane.className = "lane"; lane.innerHTML = ""; });
+    if (key === "none" && pulse) {
+      lanes[1].innerHTML = '<div class="pulse"></div>';
+    } else if (key === "right" || key === "left") {
+      lanes[key === "right" ? 2 : 0].innerHTML = `<div class="shape ${shape} from-${key}">${SVG[shape]}</div>`;
+    } else if (key === "lock") {
+      lanes[1].classList.add("block");
+      lanes[2].classList.add("block");
+    }
+  }
+
+  // A row of chips where exactly one is selected.
+  function choiceGroup(el, options, value, onChange) {
+    let current = value;
+    const buttons = options.map(opt => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip";
+      b.textContent = opt.label;
+      b.onclick = () => { current = opt.value; sync(); onChange(current); };
+      el.appendChild(b);
+      return b;
+    });
+    function sync() {
+      buttons.forEach((b, i) => b.setAttribute("aria-pressed", String(options[i].value === current)));
+    }
+    sync();
+    return () => current;
+  }
+
+  // ---- Setup screen ----
+  const initial = loadSettings();
+
+  const cueCards = CUES.map(cue => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "cue-card";
+    card.innerHTML = `
+      <div class="mini"><div class="lanes"><div class="lane"></div><div class="lane"></div><div class="lane"></div></div></div>
+      <div><strong>${cue.name}</strong> <span class="tag">${cue.tag}</span><p>${cue.text}</p></div>
+      <span class="state"></span>`;
+    const setOn = on => {
+      card.setAttribute("aria-pressed", String(on));
+      card.querySelector(".state").textContent = on ? "On" : "Off";
+    };
+    setOn(initial.cues.includes(cue.key));
+    card.onclick = () => setOn(card.getAttribute("aria-pressed") !== "true");
+    $("cues").appendChild(card);
+    return { cue, card, lanes: [...card.querySelectorAll(".lane")] };
+  });
+
+  function drawPreviews() {
+    cueCards.forEach(c => fillLanes(c.lanes, c.cue.key, getShape(), getPulse()));
+  }
+
+  const getPulse = choiceGroup($("pulse"), [
+    { label: "Faint pulse in center", value: true },
+    { label: "Blank screen", value: false },
+  ], initial.pulse, drawPreviews);
+
+  const getShape = choiceGroup($("shape"), [
+    { label: "Chevron", value: "chevron" },
+    { label: "Closing circle", value: "circle" },
+  ], initial.shape, drawPreviews);
+
+  const getTrigger = choiceGroup($("trigger"), [
+    { label: "Microphone", value: "mic" },
+    { label: "Timer", value: "timer" },
+  ], initial.trigger, showTriggerPanel);
+
+  function showTriggerPanel(trigger) {
+    $("mic-panel").hidden = trigger !== "mic";
+    $("timer-panel").hidden = trigger !== "timer";
+    if (trigger !== "mic") releaseMic();
+  }
+
+  levelInput.value = initial.level;
+  cooldownInput.value = initial.cooldown;
+  $("timer-min").value = initial.timerMin;
+  $("timer-max").value = initial.timerMax;
+  $("delay-min").value = initial.delayMin;
+  $("delay-max").value = initial.delayMax;
+  $("cue-min").value = initial.cueMin;
+  $("cue-max").value = initial.cueMax;
+
+  function syncLevelLine() { meterLine.style.left = levelInput.value + "%"; }
+  levelInput.addEventListener("input", syncLevelLine);
+  syncLevelLine();
+  drawPreviews();
+  showTriggerPanel(initial.trigger);
+
+  function readSettings() {
+    const num = id => parseFloat($(id).value);
+    const s = {
+      cues: cueCards.filter(c => c.card.getAttribute("aria-pressed") === "true").map(c => c.cue.key),
+      pulse: getPulse(),
+      shape: getShape(),
+      trigger: getTrigger(),
+      level: Number(levelInput.value),
+      cooldown: num("cooldown"),
+      timerMin: num("timer-min"),
+      timerMax: num("timer-max"),
+      delayMin: num("delay-min"),
+      delayMax: num("delay-max"),
+      cueMin: num("cue-min"),
+      cueMax: num("cue-max"),
+    };
+    if (s.cues.length === 0) return { error: "Turn on at least one cue." };
+    if (!(s.delayMin >= 0) || !(s.delayMax >= s.delayMin)) {
+      return { error: "Wait before the cue: enter two numbers, the first no bigger than the second." };
+    }
+    if (!(s.cueMin > 0) || !(s.cueMax >= s.cueMin)) {
+      return { error: "Cue on screen: enter two numbers above 0, the first no bigger than the second." };
+    }
+    if (s.trigger === "mic" && !(s.cooldown >= 0)) {
+      return { error: "Enter how many seconds to ignore sounds after a hit." };
+    }
+    if (s.trigger === "timer") {
+      if (!(s.timerMin > 0) || !(s.timerMax >= s.timerMin)) {
+        return { error: "Timer: enter two numbers above 0, the first no bigger than the second." };
+      }
+      if (s.timerMin * 1000 < s.delayMax + s.cueMax + 200) {
+        return { error: "Timer: the shortest gap must be longer than the wait plus the cue time." };
+      }
+    }
+    return { settings: s };
+  }
+
+  // ---- Microphone ----
+  // Peak loudness of the last ~40 ms, on a 0-100 scale (-60 dBFS to 0 dBFS).
+  function ensureMic() {
+    if (mic) {
+      if (mic.ctx.state !== "running") mic.ctx.resume().catch(() => {});
+      return Promise.resolve(mic);
+    }
+    if (micStarting) return micStarting;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      return Promise.reject(new Error("The microphone isn't available on this page. Open it over https, or use the Timer trigger."));
+    }
+    // Create the audio context inside the tap, or iPad Safari keeps it paused.
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new Ctx();
+    ctx.resume().catch(() => {});
+    micStarting = navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    }).then(stream => {
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 2048;
+      ctx.createMediaStreamSource(stream).connect(analyser);
+      mic = { ctx, stream, analyser, buf: new Float32Array(analyser.fftSize) };
+      micStarting = null;
+      updateMicUI();
+      requestAnimationFrame(listen);
+      return mic;
+    }, () => {
+      ctx.close().catch(() => {});
+      micStarting = null;
+      throw new Error("Microphone access was blocked. Allow it in the browser settings, or use the Timer trigger.");
+    });
+    return micStarting;
+  }
+
+  function releaseMic() {
+    if (!mic) return;
+    mic.stream.getTracks().forEach(t => t.stop());
+    mic.ctx.close().catch(() => {});
+    mic = null;
+    updateMicUI();
+  }
+
+  function updateMicUI() {
+    micToggle.textContent = mic ? "Turn off microphone" : "Turn on microphone";
+    $("mic-check").hidden = !mic;
+  }
+
+  function readLevel() {
+    mic.analyser.getFloatTimeDomainData(mic.buf);
+    let peak = 0;
+    for (let i = 0; i < mic.buf.length; i++) {
+      const a = Math.abs(mic.buf[i]);
+      if (a > peak) peak = a;
+    }
+    const db = 20 * Math.log10(peak || 1e-6);
+    return Math.max(0, Math.min(100, (db + 60) / 60 * 100));
+  }
+
+  function listen() {
+    if (!mic) return;
+    const level = readLevel();
+    const now = performance.now();
+    if (run) {
+      if (run.s.trigger === "mic" && level >= run.s.level) onTrigger(now);
+    } else {
+      meterLevel = Math.max(level, meterLevel - 1.5);
+      meterFill.style.width = meterLevel + "%";
+      const cooldownMs = (parseFloat(cooldownInput.value) || 0) * 1000;
+      if (level >= Number(levelInput.value) && now - lastTestHit > Math.max(cooldownMs, 150)) {
+        lastTestHit = now;
+        testHits++;
+        micStatus.textContent = `Hits heard: ${testHits}`;
+        meterEl.classList.add("hit");
+        setTimeout(() => meterEl.classList.remove("hit"), 250);
+      }
+    }
+    requestAnimationFrame(listen);
+  }
+
+  micToggle.onclick = () => {
+    if (mic) { releaseMic(); return; }
+    errorEl.textContent = "";
+    testHits = 0;
+    micStatus.textContent = "Hits heard: 0";
+    ensureMic().catch(e => { errorEl.textContent = e.message; });
+  };
+
+  // ---- Running the drill ----
+  function later(fn, ms) {
+    const id = setTimeout(() => { run.timers.delete(id); fn(); }, ms);
+    run.timers.add(id);
+  }
+
+  function onTrigger(now) {
+    if (now < run.armedAt) return;
+    const s = run.s;
+    const delay = rand(s.delayMin, s.delayMax);
+    const duration = rand(s.cueMin, s.cueMax);
+    const cooldownMs = s.trigger === "mic" ? s.cooldown * 1000 : 0;
+    run.armedAt = now + Math.max(cooldownMs, delay + duration + 200);
+    later(() => showCue(duration), delay);
+  }
+
+  function showCue(duration) {
+    const key = pick(run.s.cues);
+    run.counts[key] = (run.counts[key] || 0) + 1;
+    stage.style.setProperty("--cue-ms", duration + "ms");
+    fillLanes(stageLanes, key, run.s.shape, run.s.pulse);
+    stageLanesEl.classList.add("show");
+    later(() => stageLanesEl.classList.remove("show"), duration);
+  }
+
+  function scheduleTimer() {
+    later(() => {
+      onTrigger(performance.now());
+      scheduleTimer();
+    }, rand(run.s.timerMin, run.s.timerMax) * 1000);
+  }
+
+  async function requestWakeLock() {
+    try { wakeLock = navigator.wakeLock ? await navigator.wakeLock.request("screen") : null; }
+    catch (e) { wakeLock = null; }
+  }
+
+  function releaseWakeLock() {
+    if (wakeLock) wakeLock.release().catch(() => {});
+    wakeLock = null;
+  }
+
+  function enterFullscreen() {
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (req) { try { const p = req.call(el); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+  }
+
+  function exitFullscreen() {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if ((document.fullscreenElement || document.webkitFullscreenElement) && exit) exit.call(document);
+  }
+
+  function begin(s) {
+    run = { s, armedAt: performance.now() + 1000, timers: new Set(), counts: {} };
+    stageLanesEl.classList.remove("show");
+    $("exit-hint").textContent = s.trigger === "mic"
+      ? "Listening for Wall A · Tap anywhere to stop"
+      : "Tap anywhere to stop";
+    document.body.classList.add("running");
+    requestWakeLock();
+    if (s.trigger === "timer") scheduleTimer();
+  }
+
+  function start() {
+    const { settings: s, error } = readSettings();
+    if (error) { errorEl.textContent = error; return; }
+    errorEl.textContent = "";
+    saveSettings(s);
+
+    if (s.trigger === "mic" && !mic) {
+      // First time: ask for the microphone on this screen, then start.
+      ensureMic().then(() => { enterFullscreen(); begin(s); },
+                       e => { errorEl.textContent = e.message; });
+      return;
+    }
+    if (mic) ensureMic();
+    enterFullscreen();
+    begin(s);
+  }
+
+  function stop() {
+    if (!run) return;
+    run.timers.forEach(clearTimeout);
+    const counts = run.counts;
+    run = null;
+    document.body.classList.remove("running");
+    exitFullscreen();
+    releaseWakeLock();
+
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
+    $("summary").textContent = total === 0
+      ? "Last session: no cues shown."
+      : `Last session: ${total} cue${total === 1 ? "" : "s"} · ` +
+        CUES.filter(c => counts[c.key]).map(c => `${c.name} ${counts[c.key]}`).join(" · ");
+  }
+
+  $("start").onclick = start;
+  stage.onclick = stop;
+  document.addEventListener("keydown", e => { if (e.key === "Escape") stop(); });
+  document.querySelectorAll(".setup input[type=number]").forEach(input => {
+    input.addEventListener("keydown", e => { if (e.key === "Enter") start(); });
+  });
+  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement) stop(); });
+  document.addEventListener("webkitfullscreenchange", () => { if (!document.webkitFullscreenElement) stop(); });
+  // The screen wake lock is dropped when the tab is hidden; take it back on return.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && run) requestWakeLock();
+  });
+  window.addEventListener("pagehide", releaseMic);
+</script>
+</body>
+</html>
